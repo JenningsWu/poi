@@ -6,6 +6,7 @@ rimraf = require 'rimraf'
 {Grid, Col, Button, ButtonGroup, Input, Alert} = ReactBootstrap
 {config, toggleModal} = window
 {APPDATA_PATH} = window
+{openItem} = require 'shell'
 Divider = require './divider'
 NavigatorBar = require './navigator-bar'
 themes = glob.sync(path.join(ROOT, 'assets', 'themes', '*')).map (filePath) ->
@@ -16,6 +17,12 @@ PoiConfig = React.createClass
     theme: config.get 'poi.theme', '__default__'
     gameWidth: config.get('poi.scale', window.gameScale) * window.innerWidth
     useFixedResolution: if config.get('poi.scale') then true else false
+    enableConfirmQuit: config.get 'poi.confirm.quit', false
+  handleSetConfirmQuit: ->
+    enabled = @state.enableConfirmQuit
+    config.set 'poi.confirm.quit', !enabled
+    @setState
+      enableConfirmQuit: !enabled
   handleSetLayout: (layout) ->
     return if @state.layout == layout
     config.set 'poi.layout', layout
@@ -84,6 +91,13 @@ PoiConfig = React.createClass
           toggleModal '删除浏览器缓存', "删除失败，你可以手动删除 #{path.join(APPDATA_PATH, 'Cache')} 和 #{path.join(APPDATA_PATH, 'Pepper Data')}"
         else
           toggleModal '删除浏览器缓存', '删除成功，请立刻重启软件。'
+  handleOpenCustomCss: (e) ->
+    try
+      d = path.join(EXROOT, 'hack', 'custom.css')
+      fs.ensureFileSync d
+      openItem d
+    catch e
+      toggleModal '编辑自定义 CSS', '打开失败，可能没有创建文件的权限'
   componentDidMount: ->
     window.addEventListener 'resize', @handleResize
   componentWillUnmount: ->
@@ -91,8 +105,13 @@ PoiConfig = React.createClass
   render: ->
     <form id="poi-config">
       <div className="form-group" id='navigator-bar'>
-        <Divider text="导航" />
+        <Divider text="浏览器" />
         <NavigatorBar />
+        <Grid>
+          <Col xs={12}>
+            <Input type="checkbox" label="关闭前弹出确认窗口" checked={@state.enableConfirmQuit} onChange={@handleSetConfirmQuit} />
+          </Col>
+        </Grid>
       </div>
       <div className="form-group">
         <Divider text="布局" />
@@ -132,7 +151,7 @@ PoiConfig = React.createClass
       <div className="form-group">
         <Divider text="主题" />
         <Grid>
-          <Col xs={12}>
+          <Col xs={6}>
             <Input type="select" ref="theme" value={@state.theme} onChange={@handleSetTheme}>
               {
                 themes.map (theme, index) ->
@@ -141,31 +160,32 @@ PoiConfig = React.createClass
               <option key={-1} value="__default__">Default</option>
             </Input>
           </Col>
+          <Col xs={6}>
+            <Button bsStyle='primary' onClick={@handleOpenCustomCss} block>编辑自定义 CSS</Button>
+          </Col>
         </Grid>
       </div>
       {
         if @state.layout == 'horizonal'
           <div className="form-group">
             <Divider text="游戏分辨率" />
-            <Grid>
-              <Col xs={12}>
-                <Input type='checkbox' ref="useFixedResolution" label='使用固定分辨率' checked={@state.useFixedResolution} onChange={@handleSetFixedResolution} />
-              </Col>
-            </Grid>
-            <Grid id="poi-resolutionr-config">
-              <Col xs={5}>
+            <div style={display: 'flex', marginLeft: 15, marginRight: 15}>
+              <Input type='checkbox' ref="useFixedResolution" label='使用固定分辨率' checked={@state.useFixedResolution} onChange={@handleSetFixedResolution} />
+            </div>
+            <div id="poi-resolution-config" style={display: 'flex', marginLeft: 15, marginRight: 15, alignItems: 'center'}>
+              <div style={flex: 1}>
                 <Input type="number" ref="scale" value={@state.gameWidth} onChange={@handleSetScale} readOnly={!@state.useFixedResolution} />
-              </Col>
-              <Col xs={1}>
+              </div>
+              <div style={flex: 'none', width: 15, paddingLeft: 5}>
                 x
-              </Col>
-              <Col xs={5}>
+              </div>
+              <div style={flex: 1}>
                 <Input type="number" value={@state.gameWidth * 480 / 800} readOnly />
-              </Col>
-              <Col xs={1}>
+              </div>
+              <div style={flex: 'none', width: 15, paddingLeft: 5}>
                 px
-              </Col>
-            </Grid>
+              </div>
+            </div>
           </div>
       }
     </form>

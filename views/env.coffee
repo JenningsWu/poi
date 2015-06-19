@@ -68,12 +68,17 @@ window.error = (msg) ->
       message: msg
       type: 'danger'
   window.dispatchEvent event
-window.notify = (msg) ->
-  notifier.notify
-    title: 'poi'
-    message: msg
-    icon: "file://#{ROOT}/assets/icons/icon.png"
-    sound: config.get('poi.notify.sound', false)
+window.notify = (msg, options) ->
+  if process.platform == 'win32'
+    notifier.notify
+      title: 'poi'
+      message: msg
+      icon: options?.icon || path.join(ROOT, 'assets', 'icons', 'icon.png')
+      sound: config.get('poi.notify.sound', true)
+  else
+    new Notification 'poi',
+      icon: if options?.icon then "file://#{options.icon}" else "file://#{ROOT}/assets/icons/icon.png"
+      body: msg
 modals = []
 window.modalLocked = false
 window.toggleModal = (title, content, footer) ->
@@ -177,7 +182,6 @@ resolveResponses = ->
         idx = parseInt(postBody.api_ship_id)
         for itemId in _ships[idx].api_slot
           continue if itemId == -1
-          itemIdx = itemId
           delete _slotitems[itemId]
         delete _ships[idx]
       when '/kcsapi/api_req_kousyou/destroyitem2'
@@ -204,7 +208,11 @@ resolveResponses = ->
           _slotitems[itemId] = extendSlotitem afterSlot
       when '/kcsapi/api_req_kaisou/powerup'
         for shipId in postBody.api_id_items.split(',')
-          delete _ships[parseInt(shipId)]
+          idx = parseInt(shipId)
+          for itemId in _ships[idx].api_slot
+            continue if itemId == -1
+            delete _slotitems[itemId]
+          delete _ships[idx]
         _ships[body.api_ship.api_id] = extendShip body.api_ship
     event = new CustomEvent 'game.response',
       bubbles: true
@@ -223,3 +231,17 @@ proxy.addListener 'game.start', ->
   window.dispatchEvent new Event 'game.start'
 proxy.addListener 'game.payitem', ->
   window.dispatchEvent new Event 'game.payitem'
+proxy.addListener 'network.error.retry', (counter) ->
+  event = new CustomEvent 'network.error.retry',
+    bubbles: true
+    cancelable: true
+    detail:
+      counter: counter
+  window.dispatchEvent event
+proxy.addListener 'network.invalid.code', (code) ->
+  event = new CustomEvent 'network.invalid.code',
+    bubbles: true
+    cancelable: true
+    detail:
+      code: code
+  window.dispatchEvent event
