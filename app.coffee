@@ -1,9 +1,15 @@
-global.POI_VERSION = '1.1.0'
+global.POI_VERSION = '2.0.0'
 
 app = require 'app'
 BrowserWindow = require 'browser-window'
-path = require 'path'
+path = require 'path-extra'
 fs = require 'fs-extra'
+
+# Patch fs for current Electron
+fs.accessSync = (filePath, mode) ->
+  if fs.existsSync(filePath)
+    return true
+  throw new Error("ENOENT: no such file or directory, access '#{filePath}'")
 
 # Environment
 global.ROOT = __dirname
@@ -81,9 +87,9 @@ app.on 'ready', ->
     # Save current position and size
     bounds = mainWindow.getBounds()
     config.set 'poi.window', bounds
+  mainWindow.on 'closed', ->
     # Close all sub window
     require('./lib/window').closeWindows()
-  mainWindow.on 'closed', ->
     mainWindow = null
 
 # Uncaught error

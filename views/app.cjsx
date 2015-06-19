@@ -1,8 +1,10 @@
+fs = require 'fs-extra'
 path = require 'path-extra'
 glob = require 'glob'
-{ROOT, _, $, $$, React, ReactBootstrap} = window
-{Button, TabbedArea, TabPane, Alert, OverlayMixin, Modal, DropdownButton} = ReactBootstrap
-{config, proxy, log} = window
+{showItemInFolder, openItem} = require 'shell'
+{ROOT, EXROOT, _, $, $$, React, ReactBootstrap} = window
+{Button, ButtonToolbar, TabbedArea, TabPane, Alert, OverlayMixin, Modal, DropdownButton, OverlayTrigger, Tooltip} = ReactBootstrap
+{config, proxy, remote, log, success, warn, error, toggleModal} = window
 
 # Get components
 components = glob.sync(path.join(ROOT, 'views', 'components', '*'))
@@ -92,6 +94,58 @@ PoiAlert = React.createClass
   render: ->
     <Alert bsStyle={@state.type}>{@state.message}</Alert>
 
+{capturePageInMainWindow} = remote.require './lib/utils'
+PoiControl = React.createClass
+  getInitialState: ->
+    muted: false
+  handleCapturePage: ->
+    bound = $('kan-game webview').getBoundingClientRect()
+    rect =
+      x: Math.ceil bound.left
+      y: Math.ceil bound.top
+      width: Math.floor bound.width
+      height: Math.floor bound.height
+    capturePageInMainWindow rect, (err, filename) ->
+      if err?
+        error '截图保存失败'
+      else
+        success "截图保存在 #{filename}"
+  handleOpenCacheFolder: ->
+    try
+      fs.ensureDirSync path.join(window.EXROOT, 'cache')
+      openItem path.join(window.EXROOT, 'cache')
+    catch e
+      toggleModal '打开缓存目录', '打开失败，可能没有创建文件夹的权限'
+  handleOpenScreenshotFolder: ->
+    d = if process.platform == 'darwin' then path.join(path.homedir(), 'Pictures') else path.join(global.EXROOT, 'screenshots')
+    try
+      fs.ensureDirSync d
+      openItem d
+    catch e
+      toggleModal '打开截图目录', '打开失败，可能没有创建文件夹的权限'
+  handleSetMuted: ->
+    muted = !@state.muted
+    if $('kan-game webview').setAudioMuted?
+      $('kan-game webview').setAudioMuted muted
+    else
+      error '当前版本不支持静音功能'
+    @setState {muted}
+  render: ->
+    <div>
+      <OverlayTrigger placement='left' overlay={<Tooltip>自定义缓存目录</Tooltip>}>
+        <Button onClick={@handleOpenCacheFolder} bsSize='small'><FontAwesome name='bolt' /></Button>
+      </OverlayTrigger>
+      <OverlayTrigger placement='left' overlay={<Tooltip>游戏截图目录</Tooltip>}>
+        <Button onClick={@handleOpenScreenshotFolder} bsSize='small'><FontAwesome name='photo' /></Button>
+      </OverlayTrigger>
+      <OverlayTrigger placement='left' overlay={<Tooltip>一键截图</Tooltip>}>
+        <Button onClick={@handleCapturePage} bsSize='small'><FontAwesome name='camera-retro' /></Button>
+      </OverlayTrigger>
+      <OverlayTrigger placement='left' overlay={<Tooltip>{if @state.muted then '关闭声音' else '打开声音'}</Tooltip>}>
+        <Button onClick={@handleSetMuted} bsSize='small'><FontAwesome name={if @state.muted then 'volume-off' else 'volume-up'} /></Button>
+      </OverlayTrigger>
+    </div>
+
 ModalTrigger = React.createClass
   mixins: [OverlayMixin]
   getInitialState: ->
@@ -139,9 +193,15 @@ ModalTrigger = React.createClass
         </div>
       </Modal>
 
-React.render <PoiAlert />, $('poi-alert')
+CustomCssInjector = React.createClass
+  render: ->
+    <link rel='stylesheet' href={path.join(window.EXROOT, 'hack', 'custom.css')} />
+
+React.render <PoiAlert id='poi-alert' />, $('poi-alert')
+React.render <PoiControl />, $('poi-control')
 React.render <ModalTrigger />, $('poi-modal-trigger')
 React.render <ControlledTabArea />, $('poi-nav-tabs')
+React.render <CustomCssInjector />, $('poi-css-injector')
 
 dontShowAgain = ->
   config.set('poi.first', POI_VERSION)
@@ -172,10 +232,33 @@ if config.get('poi.first', '0.0.0') != POI_VERSION
   ]
   window.toggleModal title, content, footer
 
+confirmExit = false
+exitPoi = ->
+  confirmExit = true
+  window.close()
+window.onbeforeunload = (e) ->
+  if confirmExit || !config.get('poi.confirm.quit', false)
+    return true
+  else
+    toggleModal '关闭 poi', '确认退出？', [
+      name: '确定退出'
+      func: exitPoi
+      style: 'warning'
+    ]
+    return false
+
 window.addEventListener 'game.request', (e) ->
-  {method, path} = e.detail
-  log "正在请求 #{method} #{path}"
+  {method} = e.detail
+  resPath = e.detail.path
+  log "正在请求 #{method} #{resPath}"
 window.addEventListener 'game.response', (e) ->
-  {method, path, body, postBody} = e.detail
-  console.log [path, body, postBody] if process.env.DEBUG?
-  success "获得数据 #{method} #{path}"
+  {method, body, postBody} = e.detail
+  resPath = e.detail.path
+  console.log [resPath, body, postBody] if process.env.DEBUG?
+  success "获得数据 #{method} #{resPath}"
+window.addEventListener 'network.error.retry', (e) ->
+  {counter} = e.detail
+  error "网络连接错误，正在进行第#{counter}次重试"
+window.addEventListener 'network.invalid.code', (e) ->
+  {code} = e.detail
+  error "服务器返回非正常的 HTTP 状态码，HTTP #{code}"

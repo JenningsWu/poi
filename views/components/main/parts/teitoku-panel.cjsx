@@ -13,7 +13,7 @@ getHeader = (state) ->
     return '提督 [尚未登录]'
 
 getMaterialImage = (idx) ->
-  return "#{ROOT}/assets/img/material/0#{idx}.png"
+  return "file://#{ROOT}/assets/img/material/0#{idx}.png"
 
 TeitokuPanel = React.createClass
   getInitialState: ->
@@ -90,6 +90,7 @@ TeitokuPanel = React.createClass
       when '/kcsapi/api_req_kaisou/powerup'
         @setState
           shipCount: Object.keys(window._ships).length
+          slotitemCount: Object.keys(window._slotitems).length
   componentDidMount: ->
     window.addEventListener 'game.response', @handleResponse
   componentWillUnmount: ->

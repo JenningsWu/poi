@@ -1,5 +1,5 @@
-POI_VERSION = '1.1.0'
-ELECTRON_VERSION = '0.27.3'
+POI_VERSION = '2.0.0'
+ELECTRON_VERSION = '0.28.2'
 SYSTEM_BIT =
   win32: 'ia32'
   linux: 'x64'
@@ -72,15 +72,15 @@ gulp.task 'download-electron', async ->
   dir = path.join(path.tempdir(), "poi-v#{POI_VERSION}-#{PLATFORM}-#{SYSTEM_BIT[PLATFORM]}")
   fs.ensureDirSync dir
   try
-    yield fs.accessAsync path.join(path.tempdir(), "electron-v#{ELECTRON_VERSION}-#{PLATFORM}.zip")
+    yield fs.accessAsync path.join(path.homedir(), "electron-v#{ELECTRON_VERSION}-#{PLATFORM}.zip")
   catch e
     log "Downloding Electron #{PLATFORM} #{ELECTRON_VERSION}"
     [response, body] = yield requestAsync
       url: url
       encoding: null
-    yield fs.writeFileAsync path.join(path.tempdir(), "electron-v#{ELECTRON_VERSION}-#{PLATFORM}.zip"), body
+    yield fs.writeFileAsync path.join(path.homedir(), "electron-v#{ELECTRON_VERSION}-#{PLATFORM}.zip"), body
   log "Extract Electron #{ELECTRON_VERSION}"
-  zip = new AdmZip path.join(path.tempdir(), "electron-v#{ELECTRON_VERSION}-#{PLATFORM}.zip")
+  zip = new AdmZip path.join(path.homedir(), "electron-v#{ELECTRON_VERSION}-#{PLATFORM}.zip")
   zip.extractAllTo dir, true
 
 gulp.task 'copy-files', ['download-electron'], ->
@@ -108,15 +108,15 @@ gulp.task 'get-flash-player', ['install-dependencies'], async ->
   dir = path.join(path.tempdir(), "poi-v#{POI_VERSION}-#{PLATFORM}-#{SYSTEM_BIT[PLATFORM]}", 'PepperFlash')
   fs.ensureDirSync dir
   try
-    yield fs.accessAsync path.join(path.tempdir(), "flashplayer-#{PLATFORM}.zip"), fs.R_OK
+    yield fs.accessAsync path.join(path.homedir(), "flashplayer-#{PLATFORM}.zip"), fs.R_OK
   catch e
     log "Downloading flash plugin #{PLATFORM}"
     [response, body] = yield requestAsync
       url: url
       encoding: null
-    yield fs.writeFileAsync path.join(path.tempdir(), "flashplayer-#{PLATFORM}.zip"), body
+    yield fs.writeFileAsync path.join(path.homedir(), "flashplayer-#{PLATFORM}.zip"), body
   log "Extract flash plugin"
-  zip = new AdmZip path.join(path.tempdir(), "flashplayer-#{PLATFORM}.zip")
+  zip = new AdmZip path.join(path.homedir(), "flashplayer-#{PLATFORM}.zip")
   zip.extractAllTo dir, true
 
 gulp.task 'build', ['get-flash-player'], async ->
