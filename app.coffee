@@ -1,17 +1,16 @@
-global.POI_VERSION = '2.0.1'
-
 app = require 'app'
 BrowserWindow = require 'browser-window'
 path = require 'path-extra'
 fs = require 'fs-extra'
 
 # Patch fs for current Electron
-fs.accessSync = (filePath, mode) ->
-  if fs.existsSync(filePath)
-    return true
-  throw new Error("ENOENT: no such file or directory, access '#{filePath}'")
+#fs.accessSync = (filePath, mode) ->
+#  if fs.existsSync(filePath)
+#    return true
+#  throw new Error("ENOENT: no such file or directory, access '#{filePath}'")
 
 # Environment
+global.POI_VERSION = app.getVersion()
 global.ROOT = __dirname
 global.EXECROOT = path.join(process.execPath, '..')
 global.APPDATA_PATH = path.join(app.getPath('appData'), 'poi')
@@ -26,6 +25,7 @@ else
 
 config = require './lib/config'
 proxy = require './lib/proxy'
+proxy.setMaxListeners 30
 update = require './lib/update'
 {log, warn, error} = require './lib/utils'
 

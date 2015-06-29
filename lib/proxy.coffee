@@ -114,6 +114,8 @@ class Proxy extends EventEmitter
                 res.end body
                 # Emit response events to plugins
                 resolvedBody = yield resolveBody response.headers['content-encoding'], body
+                if !resolvedBody?
+                  throw new Error('Empty Body')
                 if response.statusCode == 200
                   self.emit 'game.on.response', req.method, parsed.pathname, resolvedBody, querystring.parse reqBody.toString()
                 else
@@ -133,6 +135,7 @@ class Proxy extends EventEmitter
             self.emit 'game.payitem'
         catch e
           error "#{req.method} #{req.url} #{e.toString()}"
+          self.emit 'network.error'
     # HTTPS Requests
     @server.on 'connect', (req, client, head) ->
       delete req.headers['proxy-connection']
