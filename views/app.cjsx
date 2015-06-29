@@ -3,85 +3,20 @@ path = require 'path-extra'
 glob = require 'glob'
 {showItemInFolder, openItem} = require 'shell'
 {ROOT, EXROOT, _, $, $$, React, ReactBootstrap} = window
-{Button, ButtonToolbar, TabbedArea, TabPane, Alert, OverlayMixin, Modal, DropdownButton, OverlayTrigger, Tooltip} = ReactBootstrap
+{Button, Alert, OverlayMixin, Modal, OverlayTrigger, Tooltip} = ReactBootstrap
 {config, proxy, remote, log, success, warn, error, toggleModal} = window
 
-# Get components
-components = glob.sync(path.join(ROOT, 'views', 'components', '*'))
-# Discover plugins and remove unused plugins
-plugins = glob.sync(path.join(ROOT, 'plugins', '*'))
-exPlugins = glob.sync(path.join(EXROOT, 'plugins', '*'))
-plugins = plugins.concat(exPlugins)
-plugins = plugins.filter (filePath) ->
-  # Every plugin will be required
-  try
-    plugin = require filePath
-    return config.get "plugin.#{plugin.name}.enable", true
-  catch e
-    return false
+# Main tabbed area
+ControlledTabArea =
+  if config.get('poi.tabarea.double', false)
+    require './double-tabareas'
+  else
+    require './single-tabarea'
 
-components = components.map (filePath) ->
-  component = require filePath
-  component.priority = 10000 unless component.priority?
-  component
-components = components.filter (component) ->
-  component.show isnt false and component.name != 'SettingsView'
-components = _.sortBy(components, 'priority')
-
-plugins = plugins.map (filePath) ->
-  plugin = require filePath
-  plugin.priority = 10000 unless plugin.priority?
-  plugin
-plugins = plugins.filter (plugin) ->
-  plugin.show isnt false
-plugins = _.sortBy(plugins, 'priority')
-
-settings = require path.join(ROOT, 'views', 'components', 'settings')
-
-ControlledTabArea = React.createClass
-  getInitialState: ->
-    key: 0
-  handleSelect: (key) ->
-    @setState {key}
-  render: ->
-    ### FIXME
-    # Animation disabled
-    # Relate to https://github.com/react-bootstrap/react-bootstrap/issues/287
-    ###
-    <TabbedArea activeKey={@state.key} onSelect={@handleSelect} animation={false}>
-    {
-      [
-        components.map (component, index) ->
-          <TabPane key={index} eventKey={index} tab={component.displayName} id={component.name} className='poi-app-tabpane'>
-          {
-            React.createElement(component.reactClass)
-          }
-          </TabPane>
-        <DropdownButton key={components.length} eventKey={components.length} tab='插件' navItem={true}>
-        {
-          plugins.map (plugin, index) ->
-            if plugin.handleClick
-              <div key={components.length + 1 + index} tab={plugin.displayName} id={plugin.name} onClick={plugin.handleClick} />
-            else
-              <TabPane key={components.length + 1 + index} eventKey={components.length + 1 + index} tab={plugin.displayName} id={plugin.name} className='poi-app-tabpane'>
-              {
-                React.createElement(plugin.reactClass)
-              }
-              </TabPane>
-        }
-        </DropdownButton>
-        <TabPane key={1000} eventKey={1000} tab={settings.displayName} id={settings.name} className='poi-app-tabpane'>
-        {
-          React.createElement(settings.reactClass)
-        }
-        </TabPane>
-      ]
-    }
-    </TabbedArea>
-
+# Alert info
 PoiAlert = React.createClass
   getInitialState: ->
-    message: 'poi 连接网络中'
+    message: 'poi 等待游戏数据中……'
     type: 'success'
   handleAlert: (e) ->
     @setState
@@ -94,10 +29,12 @@ PoiAlert = React.createClass
   render: ->
     <Alert bsStyle={@state.type}>{@state.message}</Alert>
 
+# Controller icon bar
 {capturePageInMainWindow} = remote.require './lib/utils'
 PoiControl = React.createClass
   getInitialState: ->
     muted: false
+    alwaysOnTop: false
   handleCapturePage: ->
     bound = $('kan-game webview').getBoundingClientRect()
     rect =
@@ -125,18 +62,48 @@ PoiControl = React.createClass
       toggleModal '打开截图目录', '打开失败，可能没有创建文件夹的权限'
   handleSetMuted: ->
     muted = !@state.muted
-    if $('kan-game webview').setAudioMuted?
-      $('kan-game webview').setAudioMuted muted
-    else
-      error '当前版本不支持静音功能'
+    config.set 'poi.content.muted', muted
+    $('kan-game webview').setAudioMuted muted
     @setState {muted}
+  handleSetAlwaysOnTop: ->
+    alwaysOnTop = !@state.alwaysOnTop
+    config.set 'poi.content.alwaysOnTop', alwaysOnTop
+    remote.getCurrentWindow().setAlwaysOnTop alwaysOnTop
+    @setState {alwaysOnTop}
+  handleOpenDevTools: ->
+    remote.getCurrentWindow().openDevTools
+      detach: true
+  handleOpenWebviewDevTools: ->
+    $('kan-game webview').openDevTools
+      detach: true
+  handleJustifyLayout: ->
+    window.dispatchEvent new Event('resize')
+  componentDidMount: ->
+    setTimeout =>
+      try
+        if config.get 'poi.content.muted', false
+          @handleSetMuted()
+        if config.get 'poi.content.alwaysOnTop', false
+          @handleSetAlwaysOnTop()
+      catch e
+        false
+    , 100
   render: ->
     <div>
-      <OverlayTrigger placement='left' overlay={<Tooltip>自定义缓存目录</Tooltip>}>
+      <OverlayTrigger placement='left' overlay={<Tooltip>开发人员工具</Tooltip>}>
+        <Button onClick={@handleOpenDevTools} onContextMenu={@handleOpenWebviewDevTools} bsSize='small'><FontAwesome name='gears' /></Button>
+      </OverlayTrigger>
+      <OverlayTrigger placement='left' overlay={<Tooltip>缓存目录</Tooltip>}>
         <Button onClick={@handleOpenCacheFolder} bsSize='small'><FontAwesome name='bolt' /></Button>
       </OverlayTrigger>
-      <OverlayTrigger placement='left' overlay={<Tooltip>游戏截图目录</Tooltip>}>
+      <OverlayTrigger placement='left' overlay={<Tooltip>截图目录</Tooltip>}>
         <Button onClick={@handleOpenScreenshotFolder} bsSize='small'><FontAwesome name='photo' /></Button>
+      </OverlayTrigger>
+      <OverlayTrigger placement='left' overlay={<Tooltip>自动适配页面</Tooltip>}>
+        <Button onClick={@handleJustifyLayout} bsSize='small'><FontAwesome name='arrows-alt' /></Button>
+      </OverlayTrigger>
+      <OverlayTrigger placement='left' overlay={<Tooltip>{if @state.alwaysOnTop then '取消置顶' else '窗口置顶'}</Tooltip>}>
+        <Button onClick={@handleSetAlwaysOnTop} bsSize='small'><FontAwesome name={if @state.alwaysOnTop then 'arrow-down' else 'arrow-up'} /></Button>
       </OverlayTrigger>
       <OverlayTrigger placement='left' overlay={<Tooltip>一键截图</Tooltip>}>
         <Button onClick={@handleCapturePage} bsSize='small'><FontAwesome name='camera-retro' /></Button>
@@ -146,6 +113,7 @@ PoiControl = React.createClass
       </OverlayTrigger>
     </div>
 
+# Notification modal
 ModalTrigger = React.createClass
   mixins: [OverlayMixin]
   getInitialState: ->
@@ -193,6 +161,7 @@ ModalTrigger = React.createClass
         </div>
       </Modal>
 
+# Custom css injector
 CustomCssInjector = React.createClass
   render: ->
     <link rel='stylesheet' href={path.join(window.EXROOT, 'hack', 'custom.css')} />
@@ -203,6 +172,7 @@ React.render <ModalTrigger />, $('poi-modal-trigger')
 React.render <ControlledTabArea />, $('poi-nav-tabs')
 React.render <CustomCssInjector />, $('poi-css-injector')
 
+# Readme contents
 dontShowAgain = ->
   config.set('poi.first', POI_VERSION)
 if config.get('poi.first', '0.0.0') != POI_VERSION
@@ -232,6 +202,7 @@ if config.get('poi.first', '0.0.0') != POI_VERSION
   ]
   window.toggleModal title, content, footer
 
+# Confirm before quit
 confirmExit = false
 exitPoi = ->
   confirmExit = true
@@ -262,3 +233,5 @@ window.addEventListener 'network.error.retry', (e) ->
 window.addEventListener 'network.invalid.code', (e) ->
   {code} = e.detail
   error "服务器返回非正常的 HTTP 状态码，HTTP #{code}"
+window.addEventListener 'network.error', ->
+  error '网络连接失败，请检查网络与代理设置'
